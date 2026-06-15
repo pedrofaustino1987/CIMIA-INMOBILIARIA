@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inmobiliaria Misiones - Mapa y Carga</title>
+    <title>Inmobiliaria Misiones - Carga por GPS</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; height: 100vh; background: #f4f6f9; }
@@ -27,12 +27,16 @@
         
         #loading { text-align: center; padding: 20px; color: #7f8c8d; }
         
-        /* Estilos para el formulario de carga */
-        select, input[type="file"] { width: 100%; padding: 8px; margin-top: 5px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        select, input[type="file"], input[type="text"] { width: 100%; padding: 8px; margin-top: 5px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
         button { background: #3498db; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.3s; }
         button:hover { background: #2980b9; }
         button:disabled { background: #95a5a6; cursor: not-allowed; }
         #upload-status { font-size: 0.9rem; margin-top: 10px; text-align: center; font-weight: bold; }
+
+        /* Estilos para la imagen en el popup del mapa */
+        .popup-img { width: 200px; height: auto; border-radius: 4px; margin-bottom: 5px; }
+        .popup-titulo { font-weight: bold; font-size: 1.1rem; margin: 0 0 5px 0; }
+        .popup-tipo { color: #7f8c8d; font-size: 0.9rem; }
     </style>
 </head>
 <body>
@@ -42,20 +46,25 @@
             <h1>🏡 Inmobiliaria Misiones</h1>
         </div>
 
-        <!-- NUEVO: FORMULARIO DE CARGA -->
+        <!-- FORMULARIO DE CARGA ACTUALIZADO -->
         <div class="section-box">
-            <h2>📤 Cargar Foto con GPS</h2>
-            <p style="font-size: 0.8rem; color: #7f8c8d;">Subí una foto tomada con el celular y la IA la ubicará en el mapa.</p>
+            <h2>📤 Ubicar Nueva Propiedad</h2>
+            <p style="font-size: 0.8rem; color: #7f8c8d;">Subí una foto tomada con el celular y se creará la propiedad en el mapa.</p>
             
-            <label for="prop-select"><strong>1. Elegí la propiedad:</strong></label>
-            <select id="prop-select">
-                <option value="">Cargando propiedades...</option>
+            <label for="tipo-select"><strong>1. Tipo de propiedad:</strong></label>
+            <select id="tipo-select">
+                <option value="terreno">Terreno</option>
+                <option value="casa">Casa</option>
+                <option value="departamento">Departamento</option>
             </select>
+
+            <label for="titulo-input"><strong>2. Nombre/Referencia:</strong></label>
+            <input type="text" id="titulo-input" placeholder="Ej: Lote sobre ruta 12" />
             
-            <label for="photo-input"><strong>2. Seleccioná la foto:</strong></label>
+            <label for="photo-input"><strong>3. Foto del lugar (con GPS):</strong></label>
             <input type="file" id="photo-input" accept="image/*" />
             
-            <button id="upload-btn" onclick="uploadPhoto()">Subir Foto y Ubicar</button>
+            <button id="upload-btn" onclick="crearPropiedadYSubirFoto()">Ubicar en el Mapa</button>
             <p id="upload-status"></p>
         </div>
 
@@ -84,7 +93,6 @@
 
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        // Inicializar el mapa centrado en Misiones
         const map = L.map('map').setView([-27.40, -55.90], 8);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
@@ -100,8 +108,6 @@
             });
         }
 
-        let allProperties = []; // Guardamos todas las propiedades aquí
-
         async function fetchProperties() {
             try {
                 const { data: properties, error } = await supabaseClient.from('propiedades').select('*');
@@ -109,81 +115,117 @@
 
                 document.getElementById('loading').style.display = 'none';
                 const listContainer = document.getElementById('property-list');
-                const propSelect = document.getElementById('prop-select');
-                propSelect.innerHTML = '<option value="">-- Seleccionar --</option>'; // Limpiar dropdown
 
                 properties.forEach(prop => {
-                    // Poblar el Dropdown
-                    const option = document.createElement('option');
-                    option.value = prop.id;
-                    option.textContent = prop.titulo;
-                    propSelect.appendChild(option);
-
                     // Poblar el Mapa
                     if (prop.latitud && prop.longitud) {
                         const color = markerColors[prop.estado] || '#888';
                         const marker = L.marker([prop.latitud, prop.longitud], { icon: getCustomIcon(color) }).addTo(map);
-                        marker.bindPopup(`<strong>${prop.titulo}</strong><br>💵 ${prop.moneda} ${prop.precio.toLocaleString()}<br>🛏️ ${prop.dormitorios || 'N/A'} Dorm.`);
+                        
+                        // Construir el contenido del Popup
+                        let popupHtml = '';
+                        if (prop.imagen_url) {
+                            popupHtml += `<img src="${prop.imagen_url}" class="popup-img" />`;
+                        }
+                        popupHtml += `<p class="popup-titulo">${prop.titulo}</p>`;
+                        popupHtml += `<p class="popup-tipo">Tipo: ${prop.tipo.charAt(0).toUpperCase() + prop.tipo.slice(1)}</p>`;
+                        
+                        marker.bindPopup(popupHtml);
                     }
 
                     // Poblar la Lista
                     const card = document.createElement('div');
                     card.className = `property-card status-${prop.estado}`;
                     card.innerHTML = `
+                        ${prop.imagen_url ? `<img src="${prop.imagen_url}" style="width:100%; height:100px; object-fit:cover; border-radius:4px; margin-bottom:10px;">` : ''}
                         <p class="property-title">${prop.titulo}</p>
-                        <p class="property-price">${prop.moneda} ${prop.precio.toLocaleString()}</p>
-                        <span class="property-type">${prop.tipo} - ${prop.operacion}</span>
+                        <span class="property-type">${prop.tipo} - ${prop.estado}</span>
                     `;
                     if (prop.latitud && prop.longitud) {
                         card.onclick = () => { map.flyTo([prop.latitud, prop.longitud], 16); };
                     } else {
-                        card.style.opacity = '0.5'; // Atenuar si no tiene ubicación
+                        card.style.opacity = '0.5';
                     }
                     listContainer.appendChild(card);
                 });
 
-                allProperties = properties;
             } catch (err) {
                 console.error("Error detallado:", err);
                 document.getElementById('loading').innerText = `Error al cargar: ${err.message}`;
             }
         }
 
-        // NUEVA FUNCIÓN: Subir la foto
-        async function uploadPhoto() {
-            const propId = document.getElementById('prop-select').value;
+        // NUEVA FUNCIÓN: Crear propiedad y subir foto
+        async function crearPropiedadYSubirFoto() {
+            const tipo = document.getElementById('tipo-select').value;
+            const titulo = document.getElementById('titulo-input').value || `Nuevo ${tipo}`;
             const fileInput = document.getElementById('photo-input');
             const file = fileInput.files[0];
             const statusText = document.getElementById('upload-status');
             const uploadBtn = document.getElementById('upload-btn');
 
-            if (!propId) { statusText.style.color = '#e74c3c'; statusText.innerText = '¡Seleccioná una propiedad!'; return; }
-            if (!file) { statusText.style.color = '#e74c3c'; statusText.innerText = '¡Seleccioná una foto!'; return; }
+            if (!file) { 
+                statusText.style.color = '#e74c3c'; 
+                statusText.innerText = '¡Seleccioná una foto!'; 
+                return; 
+            }
 
-            // Subir a Supabase Storage
             uploadBtn.disabled = true;
             statusText.style.color = '#3498db';
-            statusText.innerText = 'Subiendo foto...';
+            statusText.innerText = 'Creando propiedad...';
 
-            // La ruta debe ser: "fotos-propiedades / ID_PROPIEDAD / nombre_archivo"
-            const filePath = `${propId}/${file.name}`;
+            // 1. Crear la propiedad en la base de datos (sin coordenadas aún)
+            const { data: newProp, error: insertError } = await supabaseClient
+                .from('propiedades')
+                .insert([{ 
+                    tipo: tipo, 
+                    titulo: titulo, 
+                    operacion: 'venta', 
+                    precio: 0, 
+                    moneda: 'USD', 
+                    ubicacion: 'Detectando por GPS...', 
+                    estado: 'disponible' 
+                }])
+                .select()
+                .single();
 
-            const { data, error } = await supabaseClient.storage
-                .from('fotos-propiedades')
-                .upload(filePath, file, { cacheControl: '3600', upsert: true });
-
-            if (error) {
+            if (insertError) {
                 statusText.style.color = '#e74c3c';
-                statusText.innerText = `Error al subir: ${error.message}`;
+                statusText.innerText = `Error al crear: ${insertError.message}`;
                 uploadBtn.disabled = false;
                 return;
             }
 
+            const propId = newProp.id;
+            statusText.innerText = 'Subiendo foto...';
+
+            // 2. Subir la foto usando el ID de la nueva propiedad como carpeta
+            const filePath = `${propId}/${file.name}`;
+            const { error: uploadError } = await supabaseClient.storage
+                .from('fotos-propiedades')
+                .upload(filePath, file, { cacheControl: '3600', upsert: true });
+
+            if (uploadError) {
+                statusText.style.color = '#e74c3c';
+                statusText.innerText = `Error al subir: ${uploadError.message}`;
+                uploadBtn.disabled = false;
+                return;
+            }
+
+            // 3. Obtener la URL pública de la foto y actualizar la propiedad
+            const { data: urlData } = supabaseClient.storage.from('fotos-propiedades').getPublicUrl(filePath);
+            const publicUrl = urlData.publicUrl;
+
+            await supabaseClient
+                .from('propiedades')
+                .update({ imagen_url: publicUrl })
+                .eq('id', propId);
+
             statusText.style.color = '#27ae60';
-            statusText.innerText = '¡Foto subida! La IA está buscando el GPS y actualizará el mapa en unos segundos...';
+            statusText.innerText = '¡Listo! La IA está buscando el GPS y actualizará el mapa en unos segundos...';
             uploadBtn.disabled = false;
             
-            // Esperamos 3 segundos y recargamos la página para ver el nuevo marcador en el mapa
+            // Esperamos 4 segundos y recargamos para ver el nuevo pin
             setTimeout(() => {
                 statusText.innerText = 'Recargando mapa...';
                 location.reload();
