@@ -49,7 +49,7 @@
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         // Inicializar el mapa centrado en Buenos Aires
-        const map = L.map('map').setView([-34.60, -58.45], 12);
+        const map = L.map('map').setView([-27.40, -55.90], 8);            
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
