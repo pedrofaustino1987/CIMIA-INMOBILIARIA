@@ -3,37 +3,73 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CIMIA</title>
-    <!-- Estilos del mapa -->
+    <title>Inmobiliaria Misiones - Mapa y Carga</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; height: 100vh; background: #f4f6f9; }
-        #sidebar { width: 350px; padding: 20px; overflow-y: auto; background: #fff; box-shadow: 2px 0 10px rgba(0,0,0,0.1); z-index: 1000; }
+        #sidebar { width: 380px; padding: 20px; overflow-y: auto; background: #fff; box-shadow: 2px 0 10px rgba(0,0,0,0.1); z-index: 1000; display: flex; flex-direction: column; gap: 20px; }
         #map { flex: 1; z-index: 1; }
-        h1 { margin-top: 0; color: #2c3e50; font-size: 1.5rem; }
+        h1 { margin: 0; color: #2c3e50; font-size: 1.5rem; }
+        h2 { margin: 0; color: #34495e; font-size: 1.1rem; border-bottom: 2px solid #3498db; padding-bottom: 5px; }
+        
+        .section-box { background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e1e4e8; }
+        
         .property-card { background: #fff; border: 1px solid #e1e4e8; border-radius: 8px; padding: 15px; margin-bottom: 15px; cursor: pointer; transition: 0.3s; }
         .property-card:hover { border-color: #3498db; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
         .property-title { font-weight: bold; font-size: 1.1rem; color: #2c3e50; margin: 0 0 10px 0; }
         .property-price { color: #27ae60; font-weight: bold; font-size: 1.2rem; margin-bottom: 5px; }
         .property-type { display: inline-block; background: #eef2f7; padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; color: #7f8c8d; }
+        
         .status-disponible { border-left: 4px solid #27ae60; }
         .status-reservado { border-left: 4px solid #f39c12; }
         .status-alquilado { border-left: 4px solid #3498db; }
         .status-vendido { border-left: 4px solid #e74c3c; }
+        
         #loading { text-align: center; padding: 20px; color: #7f8c8d; }
+        
+        /* Estilos para el formulario de carga */
+        select, input[type="file"] { width: 100%; padding: 8px; margin-top: 5px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        button { background: #3498db; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.3s; }
+        button:hover { background: #2980b9; }
+        button:disabled { background: #95a5a6; cursor: not-allowed; }
+        #upload-status { font-size: 0.9rem; margin-top: 10px; text-align: center; font-weight: bold; }
     </style>
 </head>
 <body>
 
     <div id="sidebar">
-        <h1>🏡 Propiedades</h1>
-        <div id="loading">Cargando propiedades...</div>
-        <div id="property-list"></div>
+        <div>
+            <h1>🏡 Inmobiliaria Misiones</h1>
+        </div>
+
+        <!-- NUEVO: FORMULARIO DE CARGA -->
+        <div class="section-box">
+            <h2>📤 Cargar Foto con GPS</h2>
+            <p style="font-size: 0.8rem; color: #7f8c8d;">Subí una foto tomada con el celular y la IA la ubicará en el mapa.</p>
+            
+            <label for="prop-select"><strong>1. Elegí la propiedad:</strong></label>
+            <select id="prop-select">
+                <option value="">Cargando propiedades...</option>
+            </select>
+            
+            <label for="photo-input"><strong>2. Seleccioná la foto:</strong></label>
+            <input type="file" id="photo-input" accept="image/*" />
+            
+            <button id="upload-btn" onclick="uploadPhoto()">Subir Foto y Ubicar</button>
+            <p id="upload-status"></p>
+        </div>
+
+        <!-- LISTADO DE PROPIEDADES -->
+        <div>
+            <h2>📍 Propiedades en el Mapa</h2>
+            <button onclick="location.reload()" style="background: #2c3e50; margin-bottom: 15px;">🔄 Recargar Mapa</button>
+            <div id="loading">Cargando propiedades...</div>
+            <div id="property-list"></div>
+        </div>
     </div>
 
     <div id="map"></div>
 
-    <!-- Librerías JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
@@ -43,72 +79,54 @@
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFvcW9weXFiaWdqbm9la2V0Y2lkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0ODIzNTMsImV4cCI6MjA5NzA1ODM1M30.74TKe6bVroI5soAtpZ2lajerL7ZHsHQr6-sUxIukgOw';
 
         if (SUPABASE_URL === 'TU_SUPABASE_URL') {
-            document.getElementById('loading').innerText = '¡Oye! Te olvidaste de poner tus credenciales de Supabase en el código.';
+            alert('¡Oye! Te olvidaste de poner tus credenciales de Supabase en el código.');
         }
 
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        // Inicializar el mapa centrado en Buenos Aires
-        const map = L.map('map').setView([-27.40, -55.90], 8);            
+        // Inicializar el mapa centrado en Misiones
+        const map = L.map('map').setView([-27.40, -55.90], 8);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
-        // Colores para los marcadores según el estado
-        const markerColors = {
-            disponible: '#27ae60',
-            reservado: '#f39c12',
-            alquilado: '#3498db',
-            vendido: '#e74c3c'
-        };
+        const markerColors = { disponible: '#27ae60', reservado: '#f39c12', alquilado: '#3498db', vendido: '#e74c3c' };
 
-        // Función para crear ícono de mapa personalizado
         function getCustomIcon(color) {
             return L.divIcon({
                 className: 'custom-div-icon',
                 html: `<svg viewBox="0 0 24 24" width="30" height="40" style="filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.3));"><path fill="${color}" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`,
-                iconSize: [30, 40],
-                iconAnchor: [15, 40],
-                popupAnchor: [0, -40]
+                iconSize: [30, 40], iconAnchor: [15, 40], popupAnchor: [0, -40]
             });
         }
 
-        let markers = [];
+        let allProperties = []; // Guardamos todas las propiedades aquí
 
-        // Traer propiedades de Supabase
         async function fetchProperties() {
             try {
-                const { data: properties, error } = await supabaseClient
-                    .from('propiedades')
-                    .select('*');
-
-                if (error) {
-                    throw error;
-                }
+                const { data: properties, error } = await supabaseClient.from('propiedades').select('*');
+                if (error) throw error;
 
                 document.getElementById('loading').style.display = 'none';
                 const listContainer = document.getElementById('property-list');
-
-                if (properties.length === 0) {
-                    listContainer.innerHTML = '<p>No hay propiedades con coordenadas.</p>';
-                    return;
-                }
+                const propSelect = document.getElementById('prop-select');
+                propSelect.innerHTML = '<option value="">-- Seleccionar --</option>'; // Limpiar dropdown
 
                 properties.forEach(prop => {
-                    if (!prop.latitud || !prop.longitud) return; // Saltar si no tiene coordenadas
+                    // Poblar el Dropdown
+                    const option = document.createElement('option');
+                    option.value = prop.id;
+                    option.textContent = prop.titulo;
+                    propSelect.appendChild(option);
 
-                    const color = markerColors[prop.estado] || '#888';
-                    const marker = L.marker([prop.latitud, prop.longitud], { icon: getCustomIcon(color) }).addTo(map);
-                    
-                    marker.bindPopup(`
-                        <strong>${prop.titulo}</strong><br>
-                        💵 ${prop.moneda} ${prop.precio.toLocaleString()}<br>
-                        🛏️ ${prop.dormitorios || 'N/A'} Dorm. | 🛁 ${prop.banios || 'N/A'} Baños<br>
-                        <em>Estado: ${prop.estado.charAt(0).toUpperCase() + prop.estado.slice(1)}</em>
-                    `);
+                    // Poblar el Mapa
+                    if (prop.latitud && prop.longitud) {
+                        const color = markerColors[prop.estado] || '#888';
+                        const marker = L.marker([prop.latitud, prop.longitud], { icon: getCustomIcon(color) }).addTo(map);
+                        marker.bindPopup(`<strong>${prop.titulo}</strong><br>💵 ${prop.moneda} ${prop.precio.toLocaleString()}<br>🛏️ ${prop.dormitorios || 'N/A'} Dorm.`);
+                    }
 
-                    markers.push({ id: prop.id, marker: marker });
-
+                    // Poblar la Lista
                     const card = document.createElement('div');
                     card.className = `property-card status-${prop.estado}`;
                     card.innerHTML = `
@@ -116,19 +134,60 @@
                         <p class="property-price">${prop.moneda} ${prop.precio.toLocaleString()}</p>
                         <span class="property-type">${prop.tipo} - ${prop.operacion}</span>
                     `;
-                    
-                    card.onclick = () => {
-                        map.flyTo([prop.latitud, prop.longitud], 16);
-                        marker.openPopup();
-                    };
-
+                    if (prop.latitud && prop.longitud) {
+                        card.onclick = () => { map.flyTo([prop.latitud, prop.longitud], 16); };
+                    } else {
+                        card.style.opacity = '0.5'; // Atenuar si no tiene ubicación
+                    }
                     listContainer.appendChild(card);
                 });
 
+                allProperties = properties;
             } catch (err) {
                 console.error("Error detallado:", err);
-                document.getElementById('loading').innerText = `Error al cargar: ${err.message || 'Revisa la consola (F12)'}`;
+                document.getElementById('loading').innerText = `Error al cargar: ${err.message}`;
             }
+        }
+
+        // NUEVA FUNCIÓN: Subir la foto
+        async function uploadPhoto() {
+            const propId = document.getElementById('prop-select').value;
+            const fileInput = document.getElementById('photo-input');
+            const file = fileInput.files[0];
+            const statusText = document.getElementById('upload-status');
+            const uploadBtn = document.getElementById('upload-btn');
+
+            if (!propId) { statusText.style.color = '#e74c3c'; statusText.innerText = '¡Seleccioná una propiedad!'; return; }
+            if (!file) { statusText.style.color = '#e74c3c'; statusText.innerText = '¡Seleccioná una foto!'; return; }
+
+            // Subir a Supabase Storage
+            uploadBtn.disabled = true;
+            statusText.style.color = '#3498db';
+            statusText.innerText = 'Subiendo foto...';
+
+            // La ruta debe ser: "fotos-propiedades / ID_PROPIEDAD / nombre_archivo"
+            const filePath = `${propId}/${file.name}`;
+
+            const { data, error } = await supabaseClient.storage
+                .from('fotos-propiedades')
+                .upload(filePath, file, { cacheControl: '3600', upsert: true });
+
+            if (error) {
+                statusText.style.color = '#e74c3c';
+                statusText.innerText = `Error al subir: ${error.message}`;
+                uploadBtn.disabled = false;
+                return;
+            }
+
+            statusText.style.color = '#27ae60';
+            statusText.innerText = '¡Foto subida! La IA está buscando el GPS y actualizará el mapa en unos segundos...';
+            uploadBtn.disabled = false;
+            
+            // Esperamos 3 segundos y recargamos la página para ver el nuevo marcador en el mapa
+            setTimeout(() => {
+                statusText.innerText = 'Recargando mapa...';
+                location.reload();
+            }, 4000); 
         }
 
         fetchProperties();
