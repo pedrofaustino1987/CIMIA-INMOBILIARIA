@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inmobiliaria Misiones - Carga por GPS</title>
+    <title>Inmobiliaria Misiones - Voz y Mapa</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; height: 100vh; background: #f4f6f9; }
-        #sidebar { width: 380px; padding: 20px; overflow-y: auto; background: #fff; box-shadow: 2px 0 10px rgba(0,0,0,0.1); z-index: 1000; display: flex; flex-direction: column; gap: 20px; }
+        #sidebar { width: 400px; padding: 20px; overflow-y: auto; background: #fff; box-shadow: 2px 0 10px rgba(0,0,0,0.1); z-index: 1000; display: flex; flex-direction: column; gap: 20px; }
         #map { flex: 1; z-index: 1; }
         h1 { margin: 0; color: #2c3e50; font-size: 1.5rem; }
         h2 { margin: 0; color: #34495e; font-size: 1.1rem; border-bottom: 2px solid #3498db; padding-bottom: 5px; }
@@ -17,26 +17,25 @@
         .property-card { background: #fff; border: 1px solid #e1e4e8; border-radius: 8px; padding: 15px; margin-bottom: 15px; cursor: pointer; transition: 0.3s; }
         .property-card:hover { border-color: #3498db; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
         .property-title { font-weight: bold; font-size: 1.1rem; color: #2c3e50; margin: 0 0 10px 0; }
-        .property-price { color: #27ae60; font-weight: bold; font-size: 1.2rem; margin-bottom: 5px; }
         .property-type { display: inline-block; background: #eef2f7; padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; color: #7f8c8d; }
         
         .status-disponible { border-left: 4px solid #27ae60; }
-        .status-reservado { border-left: 4px solid #f39c12; }
-        .status-alquilado { border-left: 4px solid #3498db; }
-        .status-vendido { border-left: 4px solid #e74c3c; }
         
         #loading { text-align: center; padding: 20px; color: #7f8c8d; }
         
         select, input[type="file"], input[type="text"] { width: 100%; padding: 8px; margin-top: 5px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        button { background: #3498db; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.3s; }
-        button:hover { background: #2980b9; }
+        .btn { color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.3s; }
+        .btn-primary { background: #3498db; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-danger { background: #e74c3c; }
+        .btn-danger:hover { background: #c0392b; }
+        .btn-dark { background: #2c3e50; }
         button:disabled { background: #95a5a6; cursor: not-allowed; }
-        #upload-status { font-size: 0.9rem; margin-top: 10px; text-align: center; font-weight: bold; }
-
-        /* Estilos para la imagen en el popup del mapa */
-        .popup-img { width: 200px; height: auto; border-radius: 4px; margin-bottom: 5px; }
-        .popup-titulo { font-weight: bold; font-size: 1.1rem; margin: 0 0 5px 0; }
-        .popup-tipo { color: #7f8c8d; font-size: 0.9rem; }
+        
+        .status-message { font-size: 0.9rem; margin-top: 10px; text-align: center; font-weight: bold; }
+        
+        .popup-img { width: 150px; height: auto; border-radius: 4px; margin-bottom: 5px; float: left; margin-right: 10px; }
+        .popup-analisis { background: #eef2f7; padding: 8px; border-radius: 4px; margin-top: 10px; font-size: 0.9rem; }
     </style>
 </head>
 <body>
@@ -46,32 +45,47 @@
             <h1>🏡 Inmobiliaria Misiones</h1>
         </div>
 
-        <!-- FORMULARIO DE CARGA ACTUALIZADO -->
+        <!-- FORMULARIO DE CARGA POR FOTO -->
         <div class="section-box">
-            <h2>📤 Ubicar Nueva Propiedad</h2>
-            <p style="font-size: 0.8rem; color: #7f8c8d;">Subí una foto tomada con el celular y se creará la propiedad en el mapa.</p>
-            
-            <label for="tipo-select"><strong>1. Tipo de propiedad:</strong></label>
+            <h2>📤 Ubicar por Foto</h2>
+            <label for="tipo-select"><strong>Tipo:</strong></label>
             <select id="tipo-select">
                 <option value="terreno">Terreno</option>
                 <option value="casa">Casa</option>
                 <option value="departamento">Departamento</option>
             </select>
-
-            <label for="titulo-input"><strong>2. Nombre/Referencia:</strong></label>
+            <label for="titulo-input"><strong>Referencia:</strong></label>
             <input type="text" id="titulo-input" placeholder="Ej: Lote sobre ruta 12" />
-            
-            <label for="photo-input"><strong>3. Foto del lugar (con GPS):</strong></label>
+            <label for="photo-input"><strong>Foto (con GPS):</strong></label>
             <input type="file" id="photo-input" accept="image/*" />
+            <button class="btn btn-primary" onclick="crearPropiedadYSubirFoto()">Subir Foto y Ubicar</button>
+            <p id="upload-status-foto" class="status-message"></p>
+        </div>
+
+        <!-- NUEVO: FORMULARIO DE CARGA POR AUDIO -->
+        <div class="section-box">
+            <h2>🎙️ Analizar Audio de Cliente</h2>
+            <p style="font-size: 0.8rem; color: #7f8c8d;">Subí un audio de WhatsApp o grabá y la IA completará los datos.</p>
             
-            <button id="upload-btn" onclick="crearPropiedadYSubirFoto()">Ubicar en el Mapa</button>
-            <p id="upload-status"></p>
+            <label for="prop-select-audio"><strong>Asociar a propiedad:</strong></label>
+            <select id="prop-select-audio">
+                <option value="">Cargando...</option>
+            </select>
+            
+            <label for="audio-input"><strong>1. Subir audio existente:</strong></label>
+            <input type="file" id="audio-input" accept="audio/*" />
+            
+            <button id="grabar-btn" class="btn btn-danger" onclick="toggleGrabacion()">🎙️ Grabar Audio en Vivo</button>
+            <p id="grabacion-status" style="text-align:center; margin:5px 0;"></p>
+            
+            <button class="btn btn-primary" onclick="subirAudio()">Enviar Audio a IA</button>
+            <p id="upload-status-audio" class="status-message"></p>
         </div>
 
         <!-- LISTADO DE PROPIEDADES -->
         <div>
-            <h2>📍 Propiedades en el Mapa</h2>
-            <button onclick="location.reload()" style="background: #2c3e50; margin-bottom: 15px;">🔄 Recargar Mapa</button>
+            <h2>📍 Propiedades</h2>
+            <button class="btn btn-dark" onclick="location.reload()" style="margin-bottom: 15px;">🔄 Recargar Mapa</button>
             <div id="loading">Cargando propiedades...</div>
             <div id="property-list"></div>
         </div>
@@ -83,23 +97,16 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <script>
-        // 🔑 CONFIGURA TUS CREDENCIALES DE SUPABASE AQUÍ
+        // 🔑 CONFIGURA TUS CREDENCIALES
         const SUPABASE_URL = 'https://qoqopyqbigjnoeketcid.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFvcW9weXFiaWdqbm9la2V0Y2lkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0ODIzNTMsImV4cCI6MjA5NzA1ODM1M30.74TKe6bVroI5soAtpZ2lajerL7ZHsHQr6-sUxIukgOw';
-
-        if (SUPABASE_URL === 'TU_SUPABASE_URL') {
-            alert('¡Oye! Te olvidaste de poner tus credenciales de Supabase en el código.');
-        }
 
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         const map = L.map('map').setView([-27.40, -55.90], 8);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
 
         const markerColors = { disponible: '#27ae60', reservado: '#f39c12', alquilado: '#3498db', vendido: '#e74c3c' };
-
         function getCustomIcon(color) {
             return L.divIcon({
                 className: 'custom-div-icon',
@@ -108,6 +115,11 @@
             });
         }
 
+        let allProperties = [];
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let recordedBlob = null;
+
         async function fetchProperties() {
             try {
                 const { data: properties, error } = await supabaseClient.from('propiedades').select('*');
@@ -115,121 +127,133 @@
 
                 document.getElementById('loading').style.display = 'none';
                 const listContainer = document.getElementById('property-list');
+                const propSelectAudio = document.getElementById('prop-select-audio');
+                propSelectAudio.innerHTML = '<option value="">-- Seleccionar --</option>';
 
                 properties.forEach(prop => {
-                    // Poblar el Mapa
+                    // Dropdown de audio
+                    const option = document.createElement('option');
+                    option.value = prop.id;
+                    option.textContent = prop.titulo;
+                    propSelectAudio.appendChild(option);
+
+                    // Mapa
                     if (prop.latitud && prop.longitud) {
                         const color = markerColors[prop.estado] || '#888';
                         const marker = L.marker([prop.latitud, prop.longitud], { icon: getCustomIcon(color) }).addTo(map);
                         
-                        // Construir el contenido del Popup
                         let popupHtml = '';
-                        if (prop.imagen_url) {
-                            popupHtml += `<img src="${prop.imagen_url}" class="popup-img" />`;
-                        }
-                        popupHtml += `<p class="popup-titulo">${prop.titulo}</p>`;
-                        popupHtml += `<p class="popup-tipo">Tipo: ${prop.tipo.charAt(0).toUpperCase() + prop.tipo.slice(1)}</p>`;
+                        if (prop.imagen_url) popupHtml += `<img src="${prop.imagen_url}" class="popup-img"/>`;
+                        popupHtml += `<b>${prop.titulo}</b><br>Tipo: ${prop.tipo}<br>`;
                         
-                        marker.bindPopup(popupHtml);
+                        // Mostrar análisis de IA si existe
+                        if (prop.transcripcion || prop.analisis_ia) {
+                            popupHtml += `<div class="popup-analisis">`;
+                            if (prop.analisis_ia && prop.analisis_ia.resumen) {
+                                popupHtml += `<b>🤖 IA:</b> ${prop.analisis_ia.resumen}<br>`;
+                            }
+                            if (prop.transcripcion) {
+                                popupHtml += `<b>🗣️ Cliente:</b> <i>${prop.transcripcion}</i>`;
+                            }
+                            popupHtml += `</div>`;
+                        }
+                        
+                        marker.bindPopup(popupHtml, { maxWidth: 300 });
                     }
 
-                    // Poblar la Lista
+                    // Lista
                     const card = document.createElement('div');
                     card.className = `property-card status-${prop.estado}`;
-                    card.innerHTML = `
-                        ${prop.imagen_url ? `<img src="${prop.imagen_url}" style="width:100%; height:100px; object-fit:cover; border-radius:4px; margin-bottom:10px;">` : ''}
-                        <p class="property-title">${prop.titulo}</p>
-                        <span class="property-type">${prop.tipo} - ${prop.estado}</span>
-                    `;
-                    if (prop.latitud && prop.longitud) {
-                        card.onclick = () => { map.flyTo([prop.latitud, prop.longitud], 16); };
-                    } else {
-                        card.style.opacity = '0.5';
-                    }
+                    card.innerHTML = `<p class="property-title">${prop.titulo}</p><span class="property-type">${prop.tipo} - ${prop.estado}</span>`;
+                    if (prop.latitud && prop.longitud) card.onclick = () => map.flyTo([prop.latitud, prop.longitud], 16);
                     listContainer.appendChild(card);
                 });
-
-            } catch (err) {
-                console.error("Error detallado:", err);
-                document.getElementById('loading').innerText = `Error al cargar: ${err.message}`;
-            }
+                allProperties = properties;
+            } catch (err) { console.error(err); }
         }
 
-        // NUEVA FUNCIÓN: Crear propiedad y subir foto
+        // --- LÓGICA DE FOTO (Igual que antes) ---
         async function crearPropiedadYSubirFoto() {
             const tipo = document.getElementById('tipo-select').value;
             const titulo = document.getElementById('titulo-input').value || `Nuevo ${tipo}`;
-            const fileInput = document.getElementById('photo-input');
-            const file = fileInput.files[0];
-            const statusText = document.getElementById('upload-status');
-            const uploadBtn = document.getElementById('upload-btn');
+            const file = document.getElementById('photo-input').files[0];
+            const statusText = document.getElementById('upload-status-foto');
+            if (!file) { statusText.style.color = '#e74c3c'; statusText.innerText = '¡Seleccioná una foto!'; return; }
+            statusText.style.color = '#3498db'; statusText.innerText = 'Creando y subiendo...';
+            
+            const { data: newProp, error: insertError } = await supabaseClient.from('propiedades').insert([{ tipo, titulo, operacion: 'venta', precio: 0, moneda: 'USD', ubicacion: 'Detectando GPS...', estado: 'disponible' }]).select().single();
+            if (insertError) { statusText.style.color = '#e74c3c'; statusText.innerText = insertError.message; return; }
 
-            if (!file) { 
-                statusText.style.color = '#e74c3c'; 
-                statusText.innerText = '¡Seleccioná una foto!'; 
-                return; 
+            const filePath = `${newProp.id}/${file.name}`;
+            const { error: uploadError } = await supabaseClient.storage.from('fotos-propiedades').upload(filePath, file);
+            if (uploadError) { statusText.style.color = '#e74c3c'; statusText.innerText = uploadError.message; return; }
+
+            const { data: urlData } = supabaseClient.storage.from('fotos-propiedades').getPublicUrl(filePath);
+            await supabaseClient.from('propiedades').update({ imagen_url: urlData.publicUrl }).eq('id', newProp.id);
+
+            statusText.style.color = '#27ae60'; statusText.innerText = '¡Subida! Esperando GPS...';
+            setTimeout(() => location.reload(), 4000);
+        }
+
+        // --- NUEVA LÓGICA DE AUDIO ---
+        function toggleGrabacion() {
+            const btn = document.getElementById('grabar-btn');
+            const status = document.getElementById('grabacion-status');
+
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                btn.innerText = '🎙️ Grabar Audio en Vivo';
+                btn.className = 'btn btn-danger';
+                status.innerText = 'Grabación finalizada. Listo para enviar.';
+            } else {
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then(stream => {
+                        mediaRecorder = new MediaRecorder(stream);
+                        audioChunks = [];
+                        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                        mediaRecorder.onstop = () => {
+                            recordedBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                            stream.getTracks().forEach(track => track.stop()); // Apagar micro
+                        };
+                        mediaRecorder.start();
+                        btn.innerText = '⏹️ Detener Grabación';
+                        btn.className = 'btn btn-dark';
+                        status.innerText = '🔴 Grabando...';
+                    })
+                    .catch(err => {
+                        alert('No se pudo acceder al micrófono. Asegurate de dar permisos.');
+                        console.error(err);
+                    });
             }
+        }
 
-            uploadBtn.disabled = true;
-            statusText.style.color = '#3498db';
-            statusText.innerText = 'Creando propiedad...';
+        async function subirAudio() {
+            const propId = document.getElementById('prop-select-audio').value;
+            const fileInput = document.getElementById('audio-input');
+            const file = fileInput.files[0] || recordedBlob;
+            const statusText = document.getElementById('upload-status-audio');
 
-            // 1. Crear la propiedad en la base de datos (sin coordenadas aún)
-            const { data: newProp, error: insertError } = await supabaseClient
-                .from('propiedades')
-                .insert([{ 
-                    tipo: tipo, 
-                    titulo: titulo, 
-                    operacion: 'venta', 
-                    precio: 0, 
-                    moneda: 'USD', 
-                    ubicacion: 'Detectando por GPS...', 
-                    estado: 'disponible' 
-                }])
-                .select()
-                .single();
+            if (!propId) { statusText.style.color = '#e74c3c'; statusText.innerText = '¡Seleccioná una propiedad!'; return; }
+            if (!file) { statusText.style.color = '#e74c3c'; statusText.innerText = '¡Subí o grabá un audio!'; return; }
 
-            if (insertError) {
-                statusText.style.color = '#e74c3c';
-                statusText.innerText = `Error al crear: ${insertError.message}`;
-                uploadBtn.disabled = false;
-                return;
-            }
+            statusText.style.color = '#3498db'; statusText.innerText = 'Subiendo audio...';
 
-            const propId = newProp.id;
-            statusText.innerText = 'Subiendo foto...';
+            // Determinar la extensión (webm para grabado, la original para subido)
+            const ext = file.name ? file.name.split('.').pop() : 'webm';
+            const fileName = `audio_cliente.${ext}`;
+            const filePath = `${propId}/${fileName}`;
 
-            // 2. Subir la foto usando el ID de la nueva propiedad como carpeta
-            const filePath = `${propId}/${file.name}`;
-            const { error: uploadError } = await supabaseClient.storage
-                .from('fotos-propiedades')
-                .upload(filePath, file, { cacheControl: '3600', upsert: true });
+            const { error: uploadError } = await supabaseClient.storage.from('audios-clientes').upload(filePath, file, { cacheControl: '3600', upsert: true });
 
             if (uploadError) {
-                statusText.style.color = '#e74c3c';
-                statusText.innerText = `Error al subir: ${uploadError.message}`;
-                uploadBtn.disabled = false;
+                statusText.style.color = '#e74c3c'; statusText.innerText = `Error: ${uploadError.message}`;
                 return;
             }
 
-            // 3. Obtener la URL pública de la foto y actualizar la propiedad
-            const { data: urlData } = supabaseClient.storage.from('fotos-propiedades').getPublicUrl(filePath);
-            const publicUrl = urlData.publicUrl;
-
-            await supabaseClient
-                .from('propiedades')
-                .update({ imagen_url: publicUrl })
-                .eq('id', propId);
-
-            statusText.style.color = '#27ae60';
-            statusText.innerText = '¡Listo! La IA está buscando el GPS y actualizará el mapa en unos segundos...';
-            uploadBtn.disabled = false;
+            statusText.style.color = '#27ae60'; statusText.innerText = '¡Audio subido! La IA está transcribiendo y analizando (tarda unos 10 seg)...';
+            recordedBlob = null; // Limpiar
             
-            // Esperamos 4 segundos y recargamos para ver el nuevo pin
-            setTimeout(() => {
-                statusText.innerText = 'Recargando mapa...';
-                location.reload();
-            }, 4000); 
+            setTimeout(() => location.reload(), 12000); // Recargar en 12 segundos para dar tiempo a la IA
         }
 
         fetchProperties();
