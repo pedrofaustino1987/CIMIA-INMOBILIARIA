@@ -42,7 +42,11 @@
         const SUPABASE_URL = 'https://qoqopyqbigjnoeketcid.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFvcW9weXFiaWdqbm9la2V0Y2lkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0ODIzNTMsImV4cCI6MjA5NzA1ODM1M30.74TKe6bVroI5soAtpZ2lajerL7ZHsHQr6-sUxIukgOw';
 
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        if (SUPABASE_URL === 'TU_SUPABASE_URL') {
+            document.getElementById('loading').innerText = '¡Oye! Te olvidaste de poner tus credenciales de Supabase en el código.';
+        }
+
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         // Inicializar el mapa centrado en Buenos Aires
         const map = L.map('map').setView([-34.60, -58.45], 12);
@@ -73,52 +77,58 @@
 
         // Traer propiedades de Supabase
         async function fetchProperties() {
-            const { data: properties, error } = await supabase
-                .from('propiedades')
-                .select('*');
+            try {
+                const { data: properties, error } = await supabaseClient
+                    .from('propiedades')
+                    .select('*');
 
-            if (error) {
-                console.error('Error trayendo propiedades:', error);
-                document.getElementById('loading').innerText = 'Error al cargar datos.';
-                return;
+                if (error) {
+                    throw error;
+                }
+
+                document.getElementById('loading').style.display = 'none';
+                const listContainer = document.getElementById('property-list');
+
+                if (properties.length === 0) {
+                    listContainer.innerHTML = '<p>No hay propiedades con coordenadas.</p>';
+                    return;
+                }
+
+                properties.forEach(prop => {
+                    if (!prop.latitud || !prop.longitud) return; // Saltar si no tiene coordenadas
+
+                    const color = markerColors[prop.estado] || '#888';
+                    const marker = L.marker([prop.latitud, prop.longitud], { icon: getCustomIcon(color) }).addTo(map);
+                    
+                    marker.bindPopup(`
+                        <strong>${prop.titulo}</strong><br>
+                        💵 ${prop.moneda} ${prop.precio.toLocaleString()}<br>
+                        🛏️ ${prop.dormitorios || 'N/A'} Dorm. | 🛁 ${prop.banios || 'N/A'} Baños<br>
+                        <em>Estado: ${prop.estado.charAt(0).toUpperCase() + prop.estado.slice(1)}</em>
+                    `);
+
+                    markers.push({ id: prop.id, marker: marker });
+
+                    const card = document.createElement('div');
+                    card.className = `property-card status-${prop.estado}`;
+                    card.innerHTML = `
+                        <p class="property-title">${prop.titulo}</p>
+                        <p class="property-price">${prop.moneda} ${prop.precio.toLocaleString()}</p>
+                        <span class="property-type">${prop.tipo} - ${prop.operacion}</span>
+                    `;
+                    
+                    card.onclick = () => {
+                        map.flyTo([prop.latitud, prop.longitud], 16);
+                        marker.openPopup();
+                    };
+
+                    listContainer.appendChild(card);
+                });
+
+            } catch (err) {
+                console.error("Error detallado:", err);
+                document.getElementById('loading').innerText = `Error al cargar: ${err.message || 'Revisa la consola (F12)'}`;
             }
-
-            document.getElementById('loading').style.display = 'none';
-            const listContainer = document.getElementById('property-list');
-
-            properties.forEach(prop => {
-                if (!prop.latitud || !prop.longitud) return; // Saltar si no tiene coordenadas
-
-                // 1. Agregar al mapa
-                const color = markerColors[prop.estado] || '#888';
-                const marker = L.marker([prop.latitud, prop.longitud], { icon: getCustomIcon(color) }).addTo(map);
-                
-                marker.bindPopup(`
-                    <strong>${prop.titulo}</strong><br>
-                    💵 ${prop.moneda} ${prop.precio.toLocaleString()}<br>
-                    🛏️ ${prop.dormitorios || 'N/A'} Dorm. | 🛁 ${prop.banios || 'N/A'} Baños<br>
-                    <em>Estado: ${prop.estado.charAt(0).toUpperCase() + prop.estado.slice(1)}</em>
-                `);
-
-                markers.push({ id: prop.id, marker: marker });
-
-                // 2. Agregar a la lista lateral
-                const card = document.createElement('div');
-                card.className = `property-card status-${prop.estado}`;
-                card.innerHTML = `
-                    <p class="property-title">${prop.titulo}</p>
-                    <p class="property-price">${prop.moneda} ${prop.precio.toLocaleString()}</p>
-                    <span class="property-type">${prop.tipo} - ${prop.operacion}</span>
-                `;
-                
-                // Al hacer clic en la lista, volar hacia el marcador en el mapa
-                card.onclick = () => {
-                    map.flyTo([prop.latitud, prop.longitud], 16);
-                    marker.openPopup();
-                };
-
-                listContainer.appendChild(card);
-            });
         }
 
         fetchProperties();
